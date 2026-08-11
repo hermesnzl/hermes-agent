@@ -1,0 +1,49 @@
+name: lxmf-platform
+label: LXMF / Reticulum
+kind: platform
+version: 1.0.0
+description: >-
+  LXMF / Reticulum gateway adapter for Hermes Agent. Exposes Hermes over a
+  Reticulum mesh via the LXMF message protocol — send an LXMF message to the
+  gateway's delivery address and get the agent's reply as an LXMF message back.
+  Depends on the optional `rns` and `lxmf` Python packages (auto-installed when
+  the platform is enabled).
+author: Nous Research
+requires_env: []
+optional_env:
+  - name: LXMF_CONFIG_DIR
+    description: "Reticulum config directory (holds reticulum.config + identity); defaults to ~/.reticulum"
+    prompt: "Reticulum config dir (empty = ~/.reticulum)"
+    password: false
+  - name: LXMF_IDENTITY_FILE
+    description: "Path to a Reticulum identity file to use as the gateway's LXMF identity"
+    prompt: "LXMF identity file (empty = auto-generate & persist)"
+    password: false
+  - name: LXMF_DISPLAY_NAME
+    description: "Display name announced for the gateway's LXMF delivery destination"
+    prompt: "LXMF display name"
+    password: false
+  - name: LXMF_PROPAGATION_NODE
+    description: "Outbound LXMF propagation node (RNS identity/delivery hash hex) for relayed delivery"
+    prompt: "Propagation node hash (empty = direct peers only)"
+    password: false
+  - name: LXMF_PROOF_STRATEGY
+    description: "Proof strategy for the delivery destination: none (default), app, or all"
+    prompt: "Proof strategy (none/app/all)"
+    password: false
+  - name: LXMF_INBOUND_STAMP_COST
+    description: "Reticulum stamp cost demanded on inbound LXMF messages (0 = none, <255)"
+    prompt: "Inbound stamp cost (0 = none)"
+    password: false
+  - name: LXMF_ALLOWED_USERS
+    description: "Comma-separated Reticulum identity hashes allowed to talk to the bot"
+    prompt: "Allowed RNS identity hashes (comma-separated)"
+    password: false
+  - name: LXMF_ALLOW_ALL_USERS
+    description: "Allow anyone on the mesh to talk to the bot (dev only)"
+    prompt: "Allow all users? (true/false)"
+    password: false
+  - name: LXMF_HOME_DESTINATION
+    description: "Default RNS destination hash for cron / notification delivery (defaults to the gateway's own hash)"
+    prompt: "Home destination hash (empty = gateway self)"
+    password: false
