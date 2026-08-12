@@ -231,10 +231,23 @@ class LXMFAdapter(BasePlatformAdapter):
             self.inbound_stamp_cost = 0
 
         # ---- Auth / identity ----
-        self.allowed_users = list(extra.get("allowed_users", []) or [])
+        # Allowlist of RNS/LXMF identity hashes permitted to talk to the
+        # gateway.  Sourced from config.yaml platforms.lxmf.extra.allowed_users
+        # (a list) and/or the LXMF_ALLOWED_USERS env var (comma-separated).  The
+        # env var is authoritative and additive, so an operator can set the
+        # allowlist purely via environment (survives config edits) and the
+        # adapter's own intake filter agrees with the framework authz gate.
+        raw = list(extra.get("allowed_users", []) or [])
+        env_allowed = [
+            u.strip()
+            for u in (os.getenv("LXMF_ALLOWED_USERS") or "").split(",")
+            if u.strip()
+        ]
+        merged = raw + env_allowed
+        self.allowed_users = merged
         # Normalise allowed identity hashes to lowercase for lookups.
         self._allowed_users_lower = {
-            str(u).lower() for u in self.allowed_users if isinstance(u, str) and u
+            str(u).lower() for u in merged if isinstance(u, str) and u
         }
         # Allow-all toggle (env wins).
         allow_all_env = (os.getenv("LXMF_ALLOW_ALL_USERS") or "").strip().lower()
