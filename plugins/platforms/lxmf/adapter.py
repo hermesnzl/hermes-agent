@@ -306,7 +306,7 @@ class LXMFAdapter(BasePlatformAdapter):
             if self.config_dir:
                 storagepath = os.path.join(self.config_dir, "storage", "lxmf")
                 os.makedirs(storagepath, exist_ok=True)
-            self._router = _LXMRouter.LXMRouter(identity=identity, storagepath=storagepath)
+            self._router = _LXMRouter(identity=identity, storagepath=storagepath)
             self._identity = identity
 
             # Register the gateway's delivery identity (single per router) and
@@ -719,7 +719,7 @@ def _standalone_send(
         if config_dir:
             storagepath = os.path.join(config_dir, "storage", "lxmf")
             os.makedirs(storagepath, exist_ok=True)
-        router = _LXMRouter.LXMRouter(identity=identity, storagepath=storagepath)
+        router = _LXMRouter(identity=identity, storagepath=storagepath)
 
         display_name = os.getenv("LXMF_DISPLAY_NAME") or extra.get("display_name", "Hermes Agent")
         delivery = router.register_delivery_identity(identity, display_name=display_name)
