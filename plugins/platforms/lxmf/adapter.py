@@ -550,10 +550,14 @@ class LXMFAdapter(BasePlatformAdapter):
             # yet known (e.g. first reply to a peer not in known_destinations),
             # point the destination at the requested hash; Reticulum will
             # request the path and learn the key from the path/announce
-            # response before the packet is encrypted and transmitted.
+            # response before the packet is encrypted and transmitted.  A bare
+            # identity has hexhash=None, which breaks Destination construction,
+            # so we seed it with the target hash.
+            ident = ident or _RNS.Identity(create_keys=False)
+            ident.hexhash = node
+            ident.hash = node_bytes
             dest = _RNS.Destination(
-                ident or _RNS.Identity(create_keys=False),
-                _RNS.Destination.OUT, _RNS.Destination.SINGLE,
+                ident, _RNS.Destination.OUT, _RNS.Destination.SINGLE,
                 _LXMF.APP_NAME, "delivery",
             )
             dest.hash = node_bytes
@@ -738,9 +742,13 @@ def _standalone_send(
         except Exception as exc:
             logger.debug("LXMF standalone: recall failed for %s: %s", target, exc)
 
+        # A bare identity has hexhash=None, which breaks Destination
+        # construction, so seed it with the target hash.
+        ident = ident or _RNS.Identity(create_keys=False)
+        ident.hexhash = target
+        ident.hash = target_bytes
         dest = _RNS.Destination(
-            ident or _RNS.Identity(create_keys=False),
-            _RNS.Destination.OUT, _RNS.Destination.SINGLE,
+            ident, _RNS.Destination.OUT, _RNS.Destination.SINGLE,
             _LXMF.APP_NAME, "delivery",
         )
         # Point the outbound destination at the requested hash.  If the peer's
