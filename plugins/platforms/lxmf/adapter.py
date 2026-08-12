@@ -537,32 +537,28 @@ class LXMFAdapter(BasePlatformAdapter):
             # destination hash directly (the inbound LXMF delivery registered
             # it), or by identity hash.
             ident = None
+            node_bytes = bytes.fromhex(node)
             try:
                 if len(node) == 64:
-                    ident = _RNS.Identity.recall(bytes.fromhex(node), from_identity_hash=True)
+                    ident = _RNS.Identity.recall(node_bytes, from_identity_hash=True)
                 else:
-                    ident = _RNS.Identity.recall(bytes.fromhex(node))
+                    ident = _RNS.Identity.recall(node_bytes)
             except Exception as exc:
                 logger.debug("LXMF: recall failed for %s: %s", node, exc)
 
-            if ident is None:
-                # Fallback: build a public-key-only identity from the hash so
-                # an OUTBOUND destination can be constructed; Reticulum will
-                # request the path on send.
-                ident = _RNS.Identity(create_keys=False)
-                # Wrap the hash as a placeholder public key surface so the
-                # destination hash computation matches the peer's.  recall()
-                # already did this internally; here we only reach this branch
-                # when the peer is not yet known, in which case we still need
-                # a valid destination object.  We derive the delivery hash and
-                # let Reticulum resolve the key opportunistically.
-                ident.load_public_key(_RNS.Identity.truncated_hash(bytes.fromhex(node))[:_RNS.Identity.KEYSIZE // 8 // 2] * 2
-                                      if len(node) == 64 else bytes.fromhex(node))
-
+            # Build the OUTBOUND destination.  If the peer's public key is not
+            # yet known (e.g. first reply to a peer not in known_destinations),
+            # point the destination at the requested hash; Reticulum will
+            # request the path and learn the key from the path/announce
+            # response before the packet is encrypted and transmitted.
             dest = _RNS.Destination(
-                ident, _RNS.Destination.OUT, _RNS.Destination.SINGLE,
+                ident or _RNS.Identity(create_keys=False),
+                _RNS.Destination.OUT, _RNS.Destination.SINGLE,
                 _LXMF.APP_NAME, "delivery",
             )
+            dest.hash = node_bytes
+            dest.hexhash = node
+
             with self._dest_lock:
                 self._reply_destinations[target_hash_hex] = dest
             return dest
@@ -732,33 +728,42 @@ def _standalone_send(
         delivery = router.register_delivery_identity(identity, display_name=display_name)
 
         target = chat_id.strip()
+        target_bytes = bytes.fromhex(target)
         ident = None
         try:
             if len(target) == 64:
-                ident = _RNS.Identity.recall(bytes.fromhex(target), from_identity_hash=True)
+                ident = _RNS.Identity.recall(target_bytes, from_identity_hash=True)
             else:
-                ident = _RNS.Identity.recall(bytes.fromhex(target))
+                ident = _RNS.Identity.recall(target_bytes)
         except Exception as exc:
             logger.debug("LXMF standalone: recall failed for %s: %s", target, exc)
-        if ident is None:
-            ident = _RNS.Identity(create_keys=False)
-            try:
-                ident.load_public_key(
-                    _RNS.Identity.truncated_hash(bytes.fromhex(target))[: _RNS.Identity.KEYSIZE // 8 // 2] * 2
-                    if len(target) == 64 else bytes.fromhex(target)
-                )
-            except Exception:
-                pass
 
         dest = _RNS.Destination(
-            ident, _RNS.Destination.OUT, _RNS.Destination.SINGLE,
+            ident or _RNS.Identity(create_keys=False),
+            _RNS.Destination.OUT, _RNS.Destination.SINGLE,
             _LXMF.APP_NAME, "delivery",
         )
+        # Point the outbound destination at the requested hash.  If the peer's
+        # public key is not yet known, Reticulum will request the path and
+        # learn the key from the path/announce response before the packet is
+        # actually encrypted and transmitted.
+        dest.hash = target_bytes
+        dest.hexhash = target
 
         max_msg = int(extra.get("max_message_length", 1024)) or 1024
         payload = message
         if len(payload) > max_msg:
             payload = payload[:max_msg]
+
+        # If we don't yet have a path to the peer, ask the mesh for one and
+        # wait briefly for the public key to be learned.  Without a known path
+        # the message cannot be encrypted/transmitted.
+        if not _RNS.Transport.has_path(target_bytes):
+            _RNS.Transport.request_path(target_bytes)
+            for _ in range(int(os.getenv("LXMF_PATH_WAIT", "15"))):
+                if _RNS.Transport.has_path(target_bytes):
+                    break
+                time.sleep(1.0)
 
         msg = _LXMessage(destination=dest, source=delivery, content=payload, title=display_name)
         router.handle_outbound(msg)
