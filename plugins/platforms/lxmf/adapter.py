@@ -289,7 +289,15 @@ class LXMFAdapter(BasePlatformAdapter):
             return False
 
         try:
-            config_dir = self.config_dir or None
+            # Resolve the Reticulum config dir.  Empty config_dir means "use the
+            # default location" (~/.reticulum), which is what we want for the
+            # common case.  We always need a concrete directory so the LXMF
+            # router has a storage path and the gateway identity can persist.
+            config_dir = os.path.expanduser(self.config_dir) if self.config_dir else None
+            if not config_dir:
+                config_dir = _RNS.Reticulum.configdir or os.path.expanduser("~/.reticulum")
+            config_dir = os.path.abspath(config_dir)
+
             # Reticulum must be a singleton for the process lifetime; if it is
             # already initialised (e.g. another Reticulum-based platform), reuse
             # it rather than re-constructing.
@@ -302,10 +310,8 @@ class LXMFAdapter(BasePlatformAdapter):
             identity = self._load_identity()
 
             # Build the LXMF router with our identity.
-            storagepath = None
-            if self.config_dir:
-                storagepath = os.path.join(self.config_dir, "storage", "lxmf")
-                os.makedirs(storagepath, exist_ok=True)
+            storagepath = os.path.join(config_dir, "storage", "lxmf")
+            os.makedirs(storagepath, exist_ok=True)
             self._router = _LXMRouter(identity=identity, storagepath=storagepath)
             self._identity = identity
 
@@ -379,19 +385,20 @@ class LXMFAdapter(BasePlatformAdapter):
         # gateway's delivery hash (its address on the mesh) is stable across
         # restarts.  Falls back to an in-memory identity if storage is
         # unavailable.
-        if self.config_dir:
-            persist = os.path.join(self.config_dir, "storage", "hermes_lxmf_identity")
-            try:
-                os.makedirs(os.path.dirname(persist), exist_ok=True)
-                if os.path.isfile(persist):
-                    ident = _RNS.Identity.from_file(persist)
-                    if ident is not None:
-                        return ident
-                ident = _RNS.Identity()
-                ident.to_file(persist)
-                return ident
-            except Exception as exc:  # pragma: no cover - storage failure
-                logger.debug("LXMF: could not persist identity (%s); ephemeral", exc)
+        config_dir = self.config_dir or (_RNS.Reticulum.configdir or os.path.expanduser("~/.reticulum"))
+        config_dir = os.path.abspath(os.path.expanduser(config_dir))
+        persist = os.path.join(config_dir, "storage", "hermes_lxmf_identity")
+        try:
+            os.makedirs(os.path.dirname(persist), exist_ok=True)
+            if os.path.isfile(persist):
+                ident = _RNS.Identity.from_file(persist)
+                if ident is not None:
+                    return ident
+            ident = _RNS.Identity()
+            ident.to_file(persist)
+            return ident
+        except Exception as exc:  # pragma: no cover - storage failure
+            logger.debug("LXMF: could not persist identity (%s); ephemeral", exc)
         return _RNS.Identity()
 
     def _set_propagation_node(self, node: str) -> None:
